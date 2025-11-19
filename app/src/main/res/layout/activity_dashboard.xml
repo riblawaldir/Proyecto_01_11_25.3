@@ -5,26 +5,58 @@
     android:layout_height="match_parent"
     android:background="?android:attr/windowBackground">
 
-    <!-- Título -->
-    <TextView
-        android:id="@+id/txtTitle"
-        android:layout_width="wrap_content"
+    <!-- Bottom Navigation se crea programáticamente -->
+    <FrameLayout
+        android:id="@+id/bottomNavContainer"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Today's Habits"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:textColor="?android:attr/textColorPrimary"
+        android:layout_alignParentBottom="true" />
+
+    <!-- Título con botón de configuración -->
+    <RelativeLayout
+        android:id="@+id/headerLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="20dp" />
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="20dp"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:id="@+id/txtTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Today's Habits"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="?android:attr/textColorPrimary"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true" />
+
+        <ImageButton
+            android:id="@+id/btnSettings"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/ic_settings_24"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Configuración"
+            android:tint="@color/textDark"
+            android:scaleType="fitCenter"
+            android:padding="8dp" />
+    </RelativeLayout>
 
     <!-- Lista de hábitos -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvHabits"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/txtTitle"
+        android:layout_below="@id/headerLayout"
         android:layout_marginTop="12dp"
-        android:layout_marginBottom="100dp"
+        android:layout_above="@id/bottomNavContainer"
+        android:layout_marginBottom="8dp"
         android:padding="12dp" />
 
     <!-- Botón CÁMARA (encima del botón mapa) -->

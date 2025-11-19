@@ -73,6 +73,17 @@ public class StepSensorManager {
                                 "Caminar completado (" + (int)accMeters + " m) 🚶",
                                 HabitEvent.HabitType.WALK
                         ));
+                        
+                        // Agregar puntos a la base de datos
+                        try {
+                            com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper dbHelper = 
+                                new com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper(ctx);
+                            int points = dbHelper.getHabitPoints("Caminar");
+                            dbHelper.addScore("Caminar", points);
+                        } catch (Exception e) {
+                            android.util.Log.e("StepSensor", "Error al agregar puntos", e);
+                        }
+                        
                         Toast.makeText(ctx, "Meta de caminar alcanzada", Toast.LENGTH_LONG).show();
                         
                         // Notificar callback si existe

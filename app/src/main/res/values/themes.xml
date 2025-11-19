@@ -21,6 +21,13 @@
         <item name="android:statusBarColor">#001440</item>
         <item name="android:navigationBarColor">#001440</item>
         <item name="android:windowLightStatusBar">false</item>
+        <!-- Atributos necesarios para BottomNavigationView -->
+        <item name="colorSurface">#002060</item>
+        <item name="colorSurfaceVariant">#003080</item>
+        <item name="colorOnSurface">#FFFFFFFF</item>
+        <item name="colorOnSurfaceVariant">#B3D9FF</item>
+        <item name="colorControlNormal">#888888</item>
+        <item name="colorControlActivated">#FF5200</item>
     </style>
 
 </resources>

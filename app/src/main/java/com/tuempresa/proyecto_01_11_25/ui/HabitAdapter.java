@@ -29,13 +29,29 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
     public interface OnHabitClick {
         void onHabitClicked(Habit habit);
     }
+    
+    public interface OnHabitEdit {
+        void onHabitEdit(Habit habit);
+    }
+    
+    public interface OnHabitDelete {
+        void onHabitDelete(Habit habit);
+    }
 
     private final List<Habit> data;
     private final OnHabitClick listener;
+    private final OnHabitEdit editListener;
+    private final OnHabitDelete deleteListener;
 
     public HabitAdapter(List<Habit> data, OnHabitClick listener) {
+        this(data, listener, null, null);
+    }
+    
+    public HabitAdapter(List<Habit> data, OnHabitClick listener, OnHabitEdit editListener, OnHabitDelete deleteListener) {
         this.data = data;
         this.listener = listener;
+        this.editListener = editListener;
+        this.deleteListener = deleteListener;
     }
 
     @NonNull @Override
@@ -48,7 +64,13 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
     public void onBindViewHolder(@NonNull VH h, int pos) {
         Habit item = data.get(pos);
         h.txtName.setText(item.getTitle());
-        h.txtGoal.setText(item.getGoal());
+        
+        // Mostrar meta con valor objetivo si existe
+        String goalText = item.getGoal();
+        if (item.getTargetValue() > 0 && item.getTargetUnit() != null) {
+            goalText = goalText + " (" + item.getTargetValue() + " " + item.getTargetUnit() + ")";
+        }
+        h.txtGoal.setText(goalText);
         h.txtType.setText(item.getCategory());
         
         // Configurar progreso y color según estado
@@ -77,6 +99,24 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
         h.itemView.setOnClickListener(v -> {
             if (listener != null) listener.onHabitClicked(item);
         });
+        
+        // Botón editar
+        if (h.btnEdit != null) {
+            h.btnEdit.setOnClickListener(v -> {
+                if (editListener != null) {
+                    editListener.onHabitEdit(item);
+                }
+            });
+        }
+        
+        // Botón eliminar
+        if (h.btnDelete != null) {
+            h.btnDelete.setOnClickListener(v -> {
+                if (deleteListener != null) {
+                    deleteListener.onHabitDelete(item);
+                }
+            });
+        }
     }
 
     @Override public int getItemCount() { return data.size(); }
@@ -84,12 +124,15 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
     static class VH extends RecyclerView.ViewHolder {
         TextView txtName, txtGoal, txtType;
         ProgressBar progress;
+        android.widget.ImageButton btnEdit, btnDelete;
         VH(@NonNull View v) {
             super(v);
             txtName  = v.findViewById(R.id.txtHabitName);
             txtGoal  = v.findViewById(R.id.txtGoal);
             txtType  = v.findViewById(R.id.txtType);
             progress = v.findViewById(R.id.progressHabit);
+            btnEdit = v.findViewById(R.id.btnEdit);
+            btnDelete = v.findViewById(R.id.btnDelete);
         }
     }
 }
