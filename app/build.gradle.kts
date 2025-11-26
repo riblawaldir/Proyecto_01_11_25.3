@@ -57,6 +57,15 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     
+    // WorkManager para sincronización automática
+    implementation("androidx.work:work-runtime:2.9.0")
+    
+    // Lifecycle y ViewModel (opcional, para mejor arquitectura)
+    implementation("androidx.lifecycle:lifecycle-viewmodel:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-livedata:2.7.0")
+    
+    // NOTA: NO se usa Room Database, se usa SQLite nativo (HabitDatabaseHelper)
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

@@ -11,4 +11,5 @@
     <color name="orange">#FF5200</color> <!-- por si no existe -->
     <color name="green_success">#4CAF50</color>
     <color name="green_dark">#2E7D32</color>
+    <color name="colorPrimary">#FF5200</color>
 </resources>

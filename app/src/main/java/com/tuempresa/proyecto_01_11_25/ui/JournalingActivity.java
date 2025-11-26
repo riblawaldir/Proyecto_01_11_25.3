@@ -13,6 +13,7 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.tuempresa.proyecto_01_11_25.R;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
 import com.tuempresa.proyecto_01_11_25.model.Habit;
+import com.tuempresa.proyecto_01_11_25.repository.HabitRepository;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -22,6 +23,7 @@ public class JournalingActivity extends AppCompatActivity {
 
     private Habit habit;
     private HabitDatabaseHelper dbHelper;
+    private HabitRepository habitRepository;
     private SharedPreferences journalPrefs;
     private TextInputEditText edtJournal;
 
@@ -37,6 +39,7 @@ public class JournalingActivity extends AppCompatActivity {
         }
 
         dbHelper = new HabitDatabaseHelper(this);
+        habitRepository = HabitRepository.getInstance(this);
         habit = dbHelper.getHabitById(habitId);
         
         if (habit == null) {
@@ -76,14 +79,43 @@ public class JournalingActivity extends AppCompatActivity {
         habit.setCompleted(true);
         dbHelper.updateHabitCompleted(habit.getTitle(), true);
         
-        int points = dbHelper.getHabitPoints(habit.getTitle());
-        dbHelper.addScore(habit.getTitle(), points);
+        // Actualizar hábito en API
+        habitRepository.updateHabit(habit, new HabitRepository.RepositoryCallback<Habit>() {
+            @Override
+            public void onSuccess(Habit updatedHabit) {
+                android.util.Log.d("Journaling", "Hábito actualizado en API");
+            }
+
+            @Override
+            public void onError(String error) {
+                android.util.Log.e("Journaling", "Error al actualizar hábito en API: " + error);
+            }
+        });
         
-        // Notificar al Dashboard para actualizar la UI
-        setResult(RESULT_OK);
-        
-        Toast.makeText(this, "✅ Entrada guardada (+" + points + " pts)", Toast.LENGTH_SHORT).show();
-        finish();
+        // Agregar puntos (guarda en SQLite + API)
+        int points = habit.getPoints();
+        habitRepository.addScore(habit.getId(), habit.getTitle(), points, new HabitRepository.RepositoryCallback<Void>() {
+            @Override
+            public void onSuccess(Void data) {
+                runOnUiThread(() -> {
+                    // Notificar al Dashboard para actualizar la UI
+                    setResult(RESULT_OK);
+                    Toast.makeText(JournalingActivity.this, "✅ Entrada guardada (+" + points + " pts)", Toast.LENGTH_SHORT).show();
+                    finish();
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    android.util.Log.e("Journaling", "Error al guardar score: " + error);
+                    // Aún así notificar éxito local
+                    setResult(RESULT_OK);
+                    Toast.makeText(JournalingActivity.this, "✅ Entrada guardada (+" + points + " pts)", Toast.LENGTH_SHORT).show();
+                    finish();
+                });
+            }
+        });
     }
 
     private String getTodayKey() {

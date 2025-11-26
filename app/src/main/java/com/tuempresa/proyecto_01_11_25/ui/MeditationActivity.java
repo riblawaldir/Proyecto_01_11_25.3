@@ -16,6 +16,7 @@ import com.google.android.material.button.MaterialButton;
 import com.tuempresa.proyecto_01_11_25.R;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
 import com.tuempresa.proyecto_01_11_25.model.Habit;
+import com.tuempresa.proyecto_01_11_25.repository.HabitRepository;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -25,6 +26,7 @@ public class MeditationActivity extends AppCompatActivity {
 
     private Habit habit;
     private HabitDatabaseHelper dbHelper;
+    private HabitRepository habitRepository;
     private TextView txtTimer;
     private MaterialButton btnStart, btnPause, btnReset;
     private CountDownTimer timer;
@@ -44,6 +46,7 @@ public class MeditationActivity extends AppCompatActivity {
         }
 
         dbHelper = new HabitDatabaseHelper(this);
+        habitRepository = HabitRepository.getInstance(this);
         habit = dbHelper.getHabitById(habitId);
         
         if (habit == null) {
@@ -129,14 +132,43 @@ public class MeditationActivity extends AppCompatActivity {
         habit.setCompleted(true);
         dbHelper.updateHabitCompleted(habit.getTitle(), true);
         
-        int points = dbHelper.getHabitPoints(habit.getTitle());
-        dbHelper.addScore(habit.getTitle(), points);
+        // Actualizar hábito en API
+        habitRepository.updateHabit(habit, new HabitRepository.RepositoryCallback<Habit>() {
+            @Override
+            public void onSuccess(Habit updatedHabit) {
+                android.util.Log.d("Meditation", "Hábito actualizado en API");
+            }
+
+            @Override
+            public void onError(String error) {
+                android.util.Log.e("Meditation", "Error al actualizar hábito en API: " + error);
+            }
+        });
         
-        // Notificar al Dashboard para actualizar la UI
-        setResult(RESULT_OK);
-        
-        Toast.makeText(this, "✅ Meditación completada (+" + points + " pts)", Toast.LENGTH_LONG).show();
-        finish();
+        // Agregar puntos (guarda en SQLite + API)
+        int points = habit.getPoints();
+        habitRepository.addScore(habit.getId(), habit.getTitle(), points, new HabitRepository.RepositoryCallback<Void>() {
+            @Override
+            public void onSuccess(Void data) {
+                runOnUiThread(() -> {
+                    // Notificar al Dashboard para actualizar la UI
+                    setResult(RESULT_OK);
+                    Toast.makeText(MeditationActivity.this, "✅ Meditación completada (+" + points + " pts)", Toast.LENGTH_LONG).show();
+                    finish();
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    android.util.Log.e("Meditation", "Error al guardar score: " + error);
+                    // Aún así notificar éxito local
+                    setResult(RESULT_OK);
+                    Toast.makeText(MeditationActivity.this, "✅ Meditación completada (+" + points + " pts)", Toast.LENGTH_LONG).show();
+                    finish();
+                });
+            }
+        });
     }
 
     @Override

@@ -28,6 +28,7 @@ public class Habit {
     private String category;
     private HabitType type;
     private boolean completed;
+    private int points = 10; // Puntos por defecto
     private double targetValue = 0.0;
     private String targetUnit = null;
     
@@ -70,6 +71,8 @@ public class Habit {
     public void setType(HabitType type) { this.type = type; }
     public boolean isCompleted() { return completed; }
     public void setCompleted(boolean completed) { this.completed = completed; }
+    public int getPoints() { return points; }
+    public void setPoints(int points) { this.points = points; }
     public double getTargetValue() { return targetValue; }
     public void setTargetValue(double targetValue) { this.targetValue = targetValue; }
     public String getTargetUnit() { return targetUnit; }
@@ -86,12 +89,14 @@ public class Habit {
     public void setDurationMinutes(Integer durationMinutes) { this.durationMinutes = durationMinutes; }
     
     public Boolean getDndMode() { return dndMode; }
+    public boolean isDndMode() { return dndMode != null && dndMode; }
     public void setDndMode(Boolean dndMode) { this.dndMode = dndMode; }
     
     public Integer getMusicId() { return musicId; }
     public void setMusicId(Integer musicId) { this.musicId = musicId; }
     
     public Boolean getJournalEnabled() { return journalEnabled; }
+    public boolean isJournalEnabled() { return journalEnabled != null && journalEnabled; }
     public void setJournalEnabled(Boolean journalEnabled) { this.journalEnabled = journalEnabled; }
     
     public String getGymDays() { return gymDays; }
@@ -101,24 +106,28 @@ public class Habit {
     public void setWaterGoalGlasses(Integer waterGoalGlasses) { this.waterGoalGlasses = waterGoalGlasses; }
     
     public Boolean getOneClickComplete() { return oneClickComplete; }
+    public boolean isOneClickComplete() { return oneClickComplete != null && oneClickComplete; }
     public void setOneClickComplete(Boolean oneClickComplete) { this.oneClickComplete = oneClickComplete; }
     
     public Boolean getEnglishMode() { return englishMode; }
+    public boolean isEnglishMode() { return englishMode != null && englishMode; }
     public void setEnglishMode(Boolean englishMode) { this.englishMode = englishMode; }
     
     public Boolean getCodingMode() { return codingMode; }
+    public boolean isCodingMode() { return codingMode != null && codingMode; }
     public void setCodingMode(Boolean codingMode) { this.codingMode = codingMode; }
     
     public String getHabitIcon() { return habitIcon; }
     public void setHabitIcon(String habitIcon) { this.habitIcon = habitIcon; }
 
-    /** 4 hábitos por defecto al abrir la app */
-    public static List<Habit> defaultHabits() {
-        List<Habit> list = new ArrayList<>();
-        list.add(new Habit("Ejercicio", "Goal: movimiento detectado", "salud", HabitType.EXERCISE));
-        list.add(new Habit("Caminar", "Goal: 150 metros", "salud", HabitType.WALK));
-        list.add(new Habit("Leer", "Goal: detectar página de libro", "educación", HabitType.READ));
-        list.add(new Habit("Demo", "Goal: tocar para completar", "general", HabitType.DEMO));
-        return list;
-    }
+    // MÉTODO ELIMINADO: Los hábitos ahora vienen exclusivamente de la API
+    // /** 4 hábitos por defecto al abrir la app */
+    // public static List<Habit> defaultHabits() {
+    //     List<Habit> list = new ArrayList<>();
+    //     list.add(new Habit("Ejercicio", "Goal: movimiento detectado", "salud", HabitType.EXERCISE));
+    //     list.add(new Habit("Caminar", "Goal: 150 metros", "salud", HabitType.WALK));
+    //     list.add(new Habit("Leer", "Goal: detectar página de libro", "educación", HabitType.READ));
+    //     list.add(new Habit("Demo", "Goal: tocar para completar", "general", HabitType.DEMO));
+    //     return list;
+    // }
 }

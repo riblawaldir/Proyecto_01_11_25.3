@@ -78,7 +78,7 @@
             android:textColor="@color/white"
             android:background="@drawable/drawable_gradient_orange"
             app:backgroundTint="@color/teal_700"
-            app:icon="@drawable/ic_camera_24"
+            app:icon="@drawable/ic_habit_cold_shower"
             app:iconGravity="textStart"
             app:cornerRadius="36dp"
             app:elevation="8dp" />

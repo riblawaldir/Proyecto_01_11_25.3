@@ -21,9 +21,12 @@ import com.google.android.gms.location.LocationServices;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.tuempresa.proyecto_01_11_25.R;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
+import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelperSync;
 import com.tuempresa.proyecto_01_11_25.model.Habit;
 import com.tuempresa.proyecto_01_11_25.model.HabitEvent;
 import com.tuempresa.proyecto_01_11_25.model.HabitEventStore;
+import com.tuempresa.proyecto_01_11_25.network.ConnectionMonitor;
+import com.tuempresa.proyecto_01_11_25.repository.HabitRepository;
 import com.tuempresa.proyecto_01_11_25.sensors.AccelerometerSensorManager;
 import com.tuempresa.proyecto_01_11_25.sensors.GyroSensorManager;
 import com.tuempresa.proyecto_01_11_25.sensors.LightSensorManager;
@@ -32,6 +35,7 @@ import com.tuempresa.proyecto_01_11_25.sensors.StepSensorManager;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -62,8 +66,11 @@ public class DashboardActivity extends AppCompatActivity {
     private FusedLocationProviderClient fused;
     private Handler mainHandler;
     private SharedPreferences prefs;
-    private HabitDatabaseHelper dbHelper;
+    private HabitDatabaseHelper dbHelper; // Mantener para compatibilidad
+    private HabitRepository habitRepository; // Para consumo de API
     private ExecutorService executorService;
+    private ConnectionMonitor connectionMonitor;
+    private android.view.View connectionIndicator;
 
     private boolean focusMode = false;
     private boolean isNight = false;
@@ -144,35 +151,38 @@ public class DashboardActivity extends AppCompatActivity {
         // Reconfigurar barra de navegación después de setContentView (especialmente importante en modo foco)
         setupBottomNavigation();
 
+        // Configurar indicador de conexión
+        setupConnectionIndicator();
+
         fused = LocationServices.getFusedLocationProviderClient(this);
 
-        // 🔥 Inicializar base de datos
+        // 🔥 ELIMINAR BASE DE DATOS LOCAL para forzar sincronización limpia desde la API
+        // Esto resuelve conflictos y asegura que la app se sincronice correctamente con el servidor
+        // Solo se hace una vez usando SharedPreferences
+        android.content.SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+        boolean dbDeleted = prefs.getBoolean("local_db_deleted", false);
+        if (!dbDeleted) {
+            HabitDatabaseHelperSync.deleteLocalDatabase(this);
+            prefs.edit().putBoolean("local_db_deleted", true).apply();
+            android.util.Log.d("Dashboard", "Base de datos local eliminada. Se sincronizará desde la API.");
+        }
+
+        // 🔥 Inicializar base de datos (mantener para compatibilidad)
         dbHelper = new HabitDatabaseHelper(this);
 
         // 🔥 Inicializar HabitEventStore para cargar eventos guardados
         HabitEventStore.init(this);
 
-        // 🔥 Cargar hábitos desde base de datos
-        habits = dbHelper.getAllHabits();
-        
-        // Si no hay hábitos, cargar desde SharedPreferences (migración)
-        if (habits.isEmpty()) {
-            habits = loadHabitsWithState();
-            // Migrar a base de datos
-            for (Habit habit : habits) {
-                dbHelper.insertHabit(
-                    habit.getTitle(),
-                    habit.getGoal(),
-                    habit.getCategory(),
-                    habit.getType().name(),
-                    10
-                );
-            }
-        }
+        // 🔥 Inicializar Repository para consumo de API
+        habitRepository = HabitRepository.getInstance(this);
+
+        // 🔥 Cargar hábitos usando Repository (SQLite + API)
+        // Como la base de datos está vacía, se descargarán todos los hábitos desde la API
+        loadHabitsFromRepository();
 
         rv = findViewById(R.id.rvHabits);
         rv.setLayoutManager(new LinearLayoutManager(this));
-        adapter = new HabitAdapter(habits, 
+        adapter = new HabitAdapter(new ArrayList<>(), 
             this::completeDemoHabit,
             this::editHabit,
             this::deleteHabit
@@ -362,6 +372,56 @@ public class DashboardActivity extends AppCompatActivity {
             android.graphics.Color.parseColor("#888888")  // Gris cuando no está seleccionado
         };
         return new android.content.res.ColorStateList(states, colors);
+    }
+    
+    /**
+     * Configura el indicador de conexión (verde = online, rojo = offline)
+     */
+    private void setupConnectionIndicator() {
+        connectionIndicator = findViewById(R.id.connectionIndicator);
+        if (connectionIndicator == null) {
+            android.util.Log.w("Dashboard", "connectionIndicator no encontrado en el layout");
+            return;
+        }
+        
+        // Inicializar ConnectionMonitor
+        connectionMonitor = ConnectionMonitor.getInstance(this);
+        
+        // Agregar listener para actualizar el indicador
+        connectionMonitor.addListener(connectionListener);
+        
+        // Actualizar estado inicial
+        updateConnectionIndicator(connectionMonitor.isConnected());
+    }
+    
+    /**
+     * Listener para cambios de conexión
+     */
+    private final ConnectionMonitor.ConnectionListener connectionListener = new ConnectionMonitor.ConnectionListener() {
+        @Override
+        public void onConnectionChanged(boolean isConnected) {
+            // Actualizar en el hilo principal
+            mainHandler.post(() -> updateConnectionIndicator(isConnected));
+        }
+    };
+    
+    /**
+     * Actualiza el indicador visual de conexión
+     */
+    private void updateConnectionIndicator(boolean isConnected) {
+        if (connectionIndicator == null) return;
+        
+        if (isConnected) {
+            // Verde = Conectado a la API
+            connectionIndicator.setBackgroundResource(R.drawable.connection_indicator_online);
+            connectionIndicator.setContentDescription(getString(R.string.connection_online));
+            android.util.Log.d("Dashboard", "🟢 Indicador: Conectado a la API");
+        } else {
+            // Rojo = Modo offline (SQLite)
+            connectionIndicator.setBackgroundResource(R.drawable.connection_indicator_offline);
+            connectionIndicator.setContentDescription(getString(R.string.connection_offline));
+            android.util.Log.d("Dashboard", "🔴 Indicador: Modo offline (SQLite)");
+        }
     }
     
     /**
@@ -650,36 +710,42 @@ public class DashboardActivity extends AppCompatActivity {
         if (lightSensor != null) lightSensor.stop();
         if (accelerometerSensor != null) accelerometerSensor.stop();
         if (gyroSensor != null) gyroSensor.stop();
+        
+        // Remover listener de ConnectionMonitor
+        if (connectionMonitor != null) {
+            connectionMonitor.removeListener(connectionListener);
+        }
     }
 
-    /**
-     * Carga los hábitos predeterminados y restaura sus estados de completado
-     */
-    private List<Habit> loadHabitsWithState() {
-        List<Habit> defaultHabits = Habit.defaultHabits();
-        
-        // Cargar estados guardados
-        String habitsStateJson = prefs.getString(KEY_HABITS_STATE, null);
-        if (habitsStateJson != null) {
-            try {
-                JSONObject stateJson = new JSONObject(habitsStateJson);
-                
-                // Restaurar estado de cada hábito
-                for (Habit habit : defaultHabits) {
-                    String habitKey = habit.getTitle(); // Usar título como key
-                    if (stateJson.has(habitKey)) {
-                        boolean completed = stateJson.getBoolean(habitKey);
-                        habit.setCompleted(completed);
-                        android.util.Log.d("Dashboard", "Restaurado estado de " + habitKey + ": " + completed);
-                    }
-                }
-            } catch (JSONException e) {
-                android.util.Log.e("Dashboard", "Error al cargar estados de hábitos", e);
-            }
-        }
-        
-        return defaultHabits;
-    }
+    // MÉTODO ELIMINADO: Los hábitos ahora vienen exclusivamente de la API
+    // /**
+    //  * Carga los hábitos predeterminados y restaura sus estados de completado
+    //  */
+    // private List<Habit> loadHabitsWithState() {
+    //     List<Habit> defaultHabits = Habit.defaultHabits();
+    //     
+    //     // Cargar estados guardados
+    //     String habitsStateJson = prefs.getString(KEY_HABITS_STATE, null);
+    //     if (habitsStateJson != null) {
+    //         try {
+    //             JSONObject stateJson = new JSONObject(habitsStateJson);
+    //             
+    //             // Restaurar estado de cada hábito
+    //             for (Habit habit : defaultHabits) {
+    //                 String habitKey = habit.getTitle(); // Usar título como key
+    //                 if (stateJson.has(habitKey)) {
+    //                     boolean completed = stateJson.getBoolean(habitKey);
+    //                     habit.setCompleted(completed);
+    //                     android.util.Log.d("Dashboard", "Restaurado estado de " + habitKey + ": " + completed);
+    //                 }
+    //             }
+    //         } catch (JSONException e) {
+    //             android.util.Log.e("Dashboard", "Error al cargar estados de hábitos", e);
+    //         }
+    //     }
+    //     
+    //     return defaultHabits;
+    // }
 
     /**
      * Guarda los estados de completado de todos los hábitos
@@ -739,13 +805,14 @@ public class DashboardActivity extends AppCompatActivity {
                 shouldOpenCameraAfterCreation = false; // Resetear flag
                 // Pequeño delay para que se recargue la lista
                 mainHandler.postDelayed(() -> {
-                    // Buscar el hábito de leer recién creado
-                    habits = dbHelper.getAllHabits();
+                    // Buscar el hábito de leer recién creado (usar habits actuales)
                     Habit readingHabit = null;
-                    for (Habit habit : habits) {
-                        if (habit.getType() == Habit.HabitType.READ_BOOK) {
-                            readingHabit = habit;
-                            break;
+                    if (habits != null) {
+                        for (Habit habit : habits) {
+                            if (habit.getType() == Habit.HabitType.READ_BOOK) {
+                                readingHabit = habit;
+                                break;
+                            }
                         }
                     }
                     
@@ -766,42 +833,61 @@ public class DashboardActivity extends AppCompatActivity {
     }
     
     /**
-     * Refresca la lista de hábitos y actualiza el adapter en tiempo real
-     * Usa ExecutorService para cargar datos en segundo plano y actualizar UI en el hilo principal
+     * Carga hábitos usando Repository (SQLite + API)
      */
-    private void refreshHabitsList() {
-        if (dbHelper == null || adapter == null) {
-            return;
+    private void loadHabitsFromRepository() {
+        if (habitRepository == null) {
+            habitRepository = HabitRepository.getInstance(this);
         }
         
-        // Cargar hábitos en segundo plano
-        executorService.execute(() -> {
-            try {
-                // Obtener hábitos desde la base de datos
-                List<Habit> newHabits = dbHelper.getAllHabits();
-                
-                // Actualizar UI en el hilo principal
-                mainHandler.post(() -> {
+        habitRepository.getAllHabits(new HabitRepository.RepositoryCallback<List<Habit>>() {
+            @Override
+            public void onSuccess(List<Habit> habitsList) {
+                runOnUiThread(() -> {
+                    habits = habitsList;
                     if (adapter != null) {
-                        habits = newHabits;
-                        adapter.updateHabits(newHabits);
+                        adapter.updateHabits(habitsList);
                     }
                 });
-            } catch (Exception e) {
-                android.util.Log.e("Dashboard", "Error al refrescar hábitos", e);
-                // En caso de error, intentar actualizar en el hilo principal
-                mainHandler.post(() -> {
-                    if (dbHelper != null && adapter != null) {
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    android.util.Log.e("Dashboard", "Error al cargar hábitos: " + error);
+                    // Fallback a SQLite local si falla la API
+                    if (dbHelper != null) {
                         try {
                             habits = dbHelper.getAllHabits();
-                            adapter.updateHabits(habits);
-                        } catch (Exception ex) {
-                            android.util.Log.e("Dashboard", "Error crítico al refrescar", ex);
+                            if (adapter != null) {
+                                adapter.updateHabits(habits);
+                            }
+                        } catch (Exception e) {
+                            android.util.Log.e("Dashboard", "Error al cargar desde SQLite", e);
                         }
                     }
                 });
             }
         });
+    }
+
+    /**
+     * Refresca la lista de hábitos y actualiza el adapter en tiempo real
+     * Usa Repository para cargar desde SQLite + sincronizar con API
+     */
+    private void refreshHabitsList() {
+        if (habitRepository == null) {
+            habitRepository = HabitRepository.getInstance(this);
+        }
+        
+        // Usar Repository para refrescar (sincroniza con API si hay conexión)
+        loadHabitsFromRepository();
+        
+        // Forzar sincronización inmediata si hay conexión
+        if (connectionMonitor != null && connectionMonitor.isConnected()) {
+            android.util.Log.d("Dashboard", "Forzando sincronización inmediata...");
+            habitRepository.forceSync();
+        }
     }
 
     @Override
@@ -887,13 +973,8 @@ public class DashboardActivity extends AppCompatActivity {
             return; // Salir temprano para evitar inicializar sensores antes de recrear
         }
         
-        // Recargar hábitos desde base de datos al volver
-        if (dbHelper != null) {
-            habits = dbHelper.getAllHabits();
-            if (adapter != null) {
-                adapter.notifyDataSetChanged();
-            }
-        }
+        // Recargar hábitos usando Repository (sincroniza con API si hay conexión)
+        loadHabitsFromRepository();
         
         // Reinicializar sensores solo si están habilitados y no existen
         if (darkModeSensors && lightSensor == null) {
@@ -979,12 +1060,35 @@ public class DashboardActivity extends AppCompatActivity {
             if (habit.getType() == type && !habit.isCompleted()) {
                 habit.setCompleted(true);
                 
-                // Actualizar en base de datos
+                // Actualizar en base de datos local
                 dbHelper.updateHabitCompleted(habit.getTitle(), true);
                 
-                // Agregar puntos
-                int points = dbHelper.getHabitPoints(habit.getTitle());
-                dbHelper.addScore(habit.getTitle(), points);
+                // Actualizar hábito en API (marcar como completado)
+                habitRepository.updateHabit(habit, new HabitRepository.RepositoryCallback<Habit>() {
+                    @Override
+                    public void onSuccess(Habit updatedHabit) {
+                        android.util.Log.d("Dashboard", "Hábito actualizado en API: " + updatedHabit.getTitle());
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        android.util.Log.e("Dashboard", "Error al actualizar hábito en API: " + error);
+                    }
+                });
+                
+                // Agregar puntos (guarda en SQLite + API)
+                int points = habit.getPoints();
+                habitRepository.addScore(habit.getId(), habit.getTitle(), points, new HabitRepository.RepositoryCallback<Void>() {
+                    @Override
+                    public void onSuccess(Void data) {
+                        android.util.Log.d("Dashboard", "Score guardado: " + points + " puntos");
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        android.util.Log.e("Dashboard", "Error al guardar score: " + error);
+                    }
+                });
                 
                 // Guardar estado inmediatamente
                 saveHabitsState();
@@ -1047,8 +1151,33 @@ public class DashboardActivity extends AppCompatActivity {
                 // Completar DEMO manualmente
                 h.setCompleted(true);
                 dbHelper.updateHabitCompleted(h.getTitle(), true);
-                int points = dbHelper.getHabitPoints(h.getTitle());
-                dbHelper.addScore(h.getTitle(), points);
+                
+                // Actualizar hábito en API
+                habitRepository.updateHabit(h, new HabitRepository.RepositoryCallback<Habit>() {
+                    @Override
+                    public void onSuccess(Habit updatedHabit) {
+                        android.util.Log.d("Dashboard", "Hábito DEMO actualizado en API");
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        android.util.Log.e("Dashboard", "Error al actualizar hábito DEMO en API: " + error);
+                    }
+                });
+                
+                // Agregar puntos (guarda en SQLite + API)
+                int points = h.getPoints();
+                habitRepository.addScore(h.getId(), h.getTitle(), points, new HabitRepository.RepositoryCallback<Void>() {
+                    @Override
+                    public void onSuccess(Void data) {
+                        android.util.Log.d("Dashboard", "Score DEMO guardado: " + points + " puntos");
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        android.util.Log.e("Dashboard", "Error al guardar score DEMO: " + error);
+                    }
+                });
                 saveHabitsState();
                 addLocationEvent("Demo ✅ Completado", HabitEvent.HabitType.DEMO);
                 int position = habits.indexOf(h);
@@ -1084,36 +1213,34 @@ public class DashboardActivity extends AppCompatActivity {
             .setTitle("Eliminar Hábito")
             .setMessage("¿Estás seguro de que quieres eliminar \"" + habit.getTitle() + "\"?")
             .setPositiveButton("Eliminar", (dialog, which) -> {
-                // Eliminar en segundo plano
-                executorService.execute(() -> {
-                    long habitId = habit.getId();
-                    boolean deleted = false;
-                    
-                    if (habitId > 0) {
-                        deleted = dbHelper.deleteHabit(habitId);
-                    } else {
-                        // Si no tiene ID, buscar por título
-                        long id = dbHelper.getHabitIdByTitle(habit.getTitle());
-                        if (id > 0) {
-                            deleted = dbHelper.deleteHabit(id);
-                        }
-                    }
-                    
-                    final boolean finalDeleted = deleted;
-                    // Actualizar UI en el hilo principal
-                    mainHandler.post(() -> {
-                        if (finalDeleted) {
+                // Usar habitRepository para eliminar (maneja sincronización automáticamente)
+                long habitId = habit.getId();
+                if (habitId <= 0) {
+                    // Si no tiene ID, buscar por título
+                    habitId = dbHelper.getHabitIdByTitle(habit.getTitle());
+                }
+                
+                if (habitId > 0) {
+                    habitRepository.deleteHabit(habitId, new HabitRepository.RepositoryCallback<Void>() {
+                        @Override
+                        public void onSuccess(Void data) {
                             // Remover inmediatamente de la lista visual
                             if (adapter != null) {
                                 adapter.removeHabit(habit);
                             }
                             habits.remove(habit);
-                            Toast.makeText(this, "✅ Hábito eliminado", Toast.LENGTH_SHORT).show();
-                        } else {
-                            Toast.makeText(this, "❌ Error al eliminar el hábito", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(DashboardActivity.this, "✅ Hábito eliminado", Toast.LENGTH_SHORT).show();
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            android.util.Log.e("Dashboard", "Error al eliminar hábito: " + error);
+                            Toast.makeText(DashboardActivity.this, "❌ Error al eliminar el hábito", Toast.LENGTH_SHORT).show();
                         }
                     });
-                });
+                } else {
+                    Toast.makeText(this, "❌ No se pudo encontrar el hábito", Toast.LENGTH_SHORT).show();
+                }
             })
             .setNegativeButton("Cancelar", null)
             .show();

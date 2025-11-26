@@ -38,7 +38,19 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/btnSettings" />
+            app:layout_constraintEnd_toStartOf="@id/connectionIndicator" />
+
+        <!-- Indicador de conexión (verde = online, rojo = offline) -->
+        <View
+            android:id="@+id/connectionIndicator"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:background="@drawable/connection_indicator_offline"
+            android:contentDescription="@string/connection_status"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/btnSettings"
+            android:layout_marginEnd="8dp" />
 
         <ImageButton
             android:id="@+id/btnSettings"
@@ -73,7 +85,6 @@
         android:id="@+id/rvHabits"
         android:layout_width="340dp"
         android:layout_height="470dp"
-
         android:layout_marginTop="10dp"
         android:clipToPadding="false"
         android:paddingHorizontal="@dimen/padding_medium"

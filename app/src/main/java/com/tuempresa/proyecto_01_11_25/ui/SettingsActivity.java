@@ -30,20 +30,54 @@ public class SettingsActivity extends AppCompatActivity {
     private android.widget.CompoundButton.OnCheckedChangeListener listenerFocusMode;
     private android.widget.CompoundButton.OnCheckedChangeListener listenerFocusModeSensors;
 
+    // Backup
+    private com.google.android.material.button.MaterialButton btnExportData;
+    private com.google.android.material.button.MaterialButton btnImportData;
+    private com.tuempresa.proyecto_01_11_25.utils.BackupManager backupManager;
+    
+    private final androidx.activity.result.ActivityResultLauncher<android.content.Intent> exportLauncher =
+            registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == android.app.Activity.RESULT_OK && result.getData() != null) {
+                    android.net.Uri uri = result.getData().getData();
+                    if (uri != null) {
+                        performExport(uri);
+                    }
+                }
+            });
+
+    private final androidx.activity.result.ActivityResultLauncher<android.content.Intent> importLauncher =
+            registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == android.app.Activity.RESULT_OK && result.getData() != null) {
+                    android.net.Uri uri = result.getData().getData();
+                    if (uri != null) {
+                        performImport(uri);
+                    }
+                }
+            });
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        backupManager = new com.tuempresa.proyecto_01_11_25.utils.BackupManager(this);
 
         switchDarkMode = findViewById(R.id.switchDarkMode);
         switchDarkModeSensors = findViewById(R.id.switchDarkModeSensors);
         switchFocusMode = findViewById(R.id.switchFocusMode);
         switchFocusModeSensors = findViewById(R.id.switchFocusModeSensors);
+        
+        // btnExportData = findViewById(R.id.btnExportData);
+        // btnImportData = findViewById(R.id.btnImportData);
+        
+        // setupBackupButtons();
 
         // Cargar estados guardados
         loadSettings();
+        
+        // Agregar botones de cuenta programáticamente
+        addAccountButtons();
 
         // Configurar listeners - guardar referencias antes de asignarlos
         listenerDarkModeSensors = (buttonView, isChecked) -> {
@@ -168,6 +202,171 @@ public class SettingsActivity extends AppCompatActivity {
         switchFocusMode.setOnCheckedChangeListener(listenerFocusMode);
         switchFocusModeSensors.setOnCheckedChangeListener(listenerFocusModeSensors);
     }
+    
+    private void setupBackupButtons() {
+        btnExportData.setOnClickListener(v -> {
+            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+            intent.setType("application/json");
+            intent.putExtra(android.content.Intent.EXTRA_TITLE, "habitus_backup_" + System.currentTimeMillis() + ".json");
+            exportLauncher.launch(intent);
+        });
+
+        btnImportData.setOnClickListener(v -> {
+            new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Restaurar Copia de Seguridad")
+                .setMessage("¿Deseas importar datos desde un archivo? Esto fusionará los hábitos existentes.")
+                .setPositiveButton("Seleccionar Archivo", (dialog, which) -> {
+                    android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+                    intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+                    intent.setType("application/json");
+                    importLauncher.launch(intent);
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+        });
+    }
+    
+    private void performExport(android.net.Uri uri) {
+        Toast.makeText(this, "Exportando datos...", Toast.LENGTH_SHORT).show();
+        backupManager.exportData(uri, new com.tuempresa.proyecto_01_11_25.utils.BackupManager.OnBackupListener() {
+            @Override
+            public void onSuccess(String message) {
+                runOnUiThread(() -> Toast.makeText(SettingsActivity.this, message, Toast.LENGTH_LONG).show());
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> Toast.makeText(SettingsActivity.this, error, Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+    
+    private void performImport(android.net.Uri uri) {
+        Toast.makeText(this, "Importando datos...", Toast.LENGTH_SHORT).show();
+        backupManager.importData(uri, new com.tuempresa.proyecto_01_11_25.utils.BackupManager.OnBackupListener() {
+            @Override
+            public void onSuccess(String message) {
+                runOnUiThread(() -> Toast.makeText(SettingsActivity.this, message, Toast.LENGTH_LONG).show());
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> Toast.makeText(SettingsActivity.this, error, Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+
+    private void addAccountButtons() {
+        // Encontrar el LinearLayout principal del ScrollView
+        android.view.ViewGroup mainLayout = findViewById(R.id.scrollView);
+        if (mainLayout instanceof androidx.core.widget.NestedScrollView) {
+            androidx.core.widget.NestedScrollView scrollView = (androidx.core.widget.NestedScrollView) mainLayout;
+            if (scrollView.getChildCount() > 0 && scrollView.getChildAt(0) instanceof android.widget.LinearLayout) {
+                android.widget.LinearLayout contentLayout = (android.widget.LinearLayout) scrollView.getChildAt(0);
+                
+                // Crear sección de cuenta
+                android.widget.TextView accountTitle = new android.widget.TextView(this);
+                accountTitle.setText("Cuenta");
+                accountTitle.setTextColor(getResources().getColor(R.color.orangeStart));
+                accountTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16);
+                accountTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+                android.widget.LinearLayout.LayoutParams titleParams = new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                titleParams.setMargins(
+                    (int) (4 * getResources().getDisplayMetrics().density),
+                    (int) (24 * getResources().getDisplayMetrics().density),
+                    0,
+                    (int) (12 * getResources().getDisplayMetrics().density)
+                );
+                accountTitle.setLayoutParams(titleParams);
+                contentLayout.addView(accountTitle);
+                
+                // Crear card para botones
+                com.google.android.material.card.MaterialCardView card = new com.google.android.material.card.MaterialCardView(this);
+                android.widget.LinearLayout.LayoutParams cardParams = new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                cardParams.setMargins(0, 0, 0, (int) (24 * getResources().getDisplayMetrics().density));
+                card.setLayoutParams(cardParams);
+                card.setRadius(16 * getResources().getDisplayMetrics().density);
+                card.setCardElevation(2 * getResources().getDisplayMetrics().density);
+                card.setCardBackgroundColor(getResources().getColor(R.color.white));
+                
+                // LinearLayout dentro del card
+                android.widget.LinearLayout cardContent = new android.widget.LinearLayout(this);
+                cardContent.setOrientation(android.widget.LinearLayout.VERTICAL);
+                cardContent.setPadding(
+                    (int) (20 * getResources().getDisplayMetrics().density),
+                    (int) (20 * getResources().getDisplayMetrics().density),
+                    (int) (20 * getResources().getDisplayMetrics().density),
+                    (int) (20 * getResources().getDisplayMetrics().density)
+                );
+                
+                // Botón de logout
+                com.google.android.material.button.MaterialButton btnLogout = new com.google.android.material.button.MaterialButton(this);
+                btnLogout.setText("Cerrar Sesión");
+                btnLogout.setTextColor(getResources().getColor(android.R.color.white));
+                btnLogout.setBackgroundColor(getResources().getColor(R.color.orange));
+                btnLogout.setCornerRadius((int) (12 * getResources().getDisplayMetrics().density));
+                android.widget.LinearLayout.LayoutParams logoutParams = new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                btnLogout.setLayoutParams(logoutParams);
+                btnLogout.setOnClickListener(v -> logout());
+                cardContent.addView(btnLogout);
+                
+                // Texto descriptivo logout
+                android.widget.TextView logoutDesc = new android.widget.TextView(this);
+                logoutDesc.setText("Cierra tu sesión actual. Podrás volver a iniciar sesión cuando quieras.");
+                logoutDesc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
+                logoutDesc.setTextColor(getResources().getColor(R.color.textLight));
+                logoutDesc.setGravity(android.view.Gravity.CENTER);
+                android.widget.LinearLayout.LayoutParams logoutDescParams = new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                logoutDescParams.setMargins(0, (int) (8 * getResources().getDisplayMetrics().density), 0, (int) (16 * getResources().getDisplayMetrics().density));
+                logoutDesc.setLayoutParams(logoutDescParams);
+                cardContent.addView(logoutDesc);
+                
+                // Botón de eliminar cuenta
+                com.google.android.material.button.MaterialButton btnDelete = new com.google.android.material.button.MaterialButton(this);
+                btnDelete.setText("Eliminar Cuenta");
+                btnDelete.setTextColor(getResources().getColor(android.R.color.white));
+                btnDelete.setBackgroundColor(0xFFD32F2F); // Rojo
+                btnDelete.setCornerRadius((int) (12 * getResources().getDisplayMetrics().density));
+                android.widget.LinearLayout.LayoutParams deleteParams = new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                btnDelete.setLayoutParams(deleteParams);
+                btnDelete.setOnClickListener(v -> deleteAccount());
+                cardContent.addView(btnDelete);
+                
+                // Texto descriptivo delete
+                android.widget.TextView deleteDesc = new android.widget.TextView(this);
+                deleteDesc.setText("⚠️ Esta acción es permanente. Se eliminarán todos tus datos y no podrás recuperarlos.");
+                deleteDesc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
+                deleteDesc.setTextColor(0xFFD32F2F); // Rojo
+                deleteDesc.setGravity(android.view.Gravity.CENTER);
+                android.widget.LinearLayout.LayoutParams deleteDescParams = new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                deleteDescParams.setMargins(0, (int) (8 * getResources().getDisplayMetrics().density), 0, 0);
+                deleteDesc.setLayoutParams(deleteDescParams);
+                cardContent.addView(deleteDesc);
+                
+                card.addView(cardContent);
+                contentLayout.addView(card);
+            }
+        }
+    }
 
     private void loadSettings() {
         boolean darkMode = prefs.getBoolean(KEY_NIGHT_MODE, false);
@@ -179,6 +378,95 @@ public class SettingsActivity extends AppCompatActivity {
         switchDarkModeSensors.setChecked(darkModeSensors);
         switchFocusMode.setChecked(focusMode);
         switchFocusModeSensors.setChecked(focusModeSensors);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(android.view.Menu menu) {
+        getMenuInflater().inflate(R.menu.settings_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(android.view.MenuItem item) {
+        if (item.getItemId() == R.id.action_logout) {
+            logout();
+            return true;
+        } else if (item.getItemId() == R.id.action_delete_account) {
+            deleteAccount();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void logout() {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Cerrar Sesión")
+                .setMessage("¿Estás seguro de que deseas cerrar sesión?")
+                .setPositiveButton("Sí", (dialog, which) -> {
+                    // Cerrar sesión
+                    com.tuempresa.proyecto_01_11_25.utils.SessionManager sessionManager = 
+                            new com.tuempresa.proyecto_01_11_25.utils.SessionManager(this);
+                    sessionManager.logout();
+                    
+                    // Redirigir a LoginActivity
+                    android.content.Intent intent = new android.content.Intent(this, LoginActivity.class);
+                    intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(intent);
+                    finish();
+                    
+                    Toast.makeText(this, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("No", null)
+                .show();
+    }
+
+    private void deleteAccount() {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("⚠️ Eliminar Cuenta")
+                .setMessage("Esta acción es PERMANENTE y eliminará:\n\n" +
+                        "• Tu cuenta de usuario\n" +
+                        "• Todos tus hábitos\n" +
+                        "• Todo tu progreso y puntajes\n\n" +
+                        "¿Estás completamente seguro?")
+                .setPositiveButton("Sí, eliminar todo", (dialog, which) -> {
+                    // Confirmación adicional
+                    new android.app.AlertDialog.Builder(this)
+                            .setTitle("Última confirmación")
+                            .setMessage("¿Realmente deseas eliminar tu cuenta? No podrás recuperar tus datos.")
+                            .setPositiveButton("Eliminar definitivamente", (dialog2, which2) -> {
+                                performAccountDeletion();
+                            })
+                            .setNegativeButton("Cancelar", null)
+                            .show();
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
+    private void performAccountDeletion() {
+        com.tuempresa.proyecto_01_11_25.utils.SessionManager sessionManager = 
+                new com.tuempresa.proyecto_01_11_25.utils.SessionManager(this);
+        long userId = sessionManager.getUserId();
+        
+        com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper dbHelper = 
+                new com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper(this);
+        
+        boolean deleted = dbHelper.deleteUser(userId);
+        
+        if (deleted) {
+            // Cerrar sesión
+            sessionManager.logout();
+            
+            // Redirigir a LoginActivity
+            android.content.Intent intent = new android.content.Intent(this, LoginActivity.class);
+            intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+            finish();
+            
+            Toast.makeText(this, "Cuenta eliminada correctamente", Toast.LENGTH_LONG).show();
+        } else {
+            Toast.makeText(this, "Error al eliminar la cuenta", Toast.LENGTH_LONG).show();
+        }
     }
 }
 

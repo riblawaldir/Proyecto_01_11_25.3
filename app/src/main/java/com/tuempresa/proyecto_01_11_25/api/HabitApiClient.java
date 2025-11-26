@@ -22,13 +22,17 @@ public class HabitApiClient {
     private static final String TAG = "HabitApiClient";
     
     // URL base de la API - Configurar según tu servidor
-    // Para desarrollo local: "https://localhost:7000/api/v1/" o "http://10.0.2.2:5000/api/v1/" (emulador Android)
-    // Para Somee (producción): "https://[tu-proyecto].somee.com/api/v1/"
-    // IMPORTANTE: Reemplaza [tu-proyecto] con el nombre real de tu proyecto en Somee
-    private static final String BASE_URL = "https://demopagina.somee.com/api/v1/";
+    // Para desarrollo local en emulador: "http://10.0.2.2:5098/api/v1/" (puerto por defecto de .NET)
+    // Para desarrollo local en dispositivo físico: "http://192.168.x.x:5098/api/v1/" (IP de tu PC)
+    // Para producción: "https://demopagina.somee.com/api/v1/"
+    // IMPORTANTE: Verifica el puerto en launchSettings.json de la API (puede ser 5098, 5000, etc.)
+    private static final String BASE_URL = "http://10.0.2.2:5098/api/v1/"; // Emulador (puerto 5098 por defecto)
+    // private static final String BASE_URL = "http://192.168.1.100:5098/api/v1/"; // Dispositivo físico (cambiar IP y puerto)
+    // private static final String BASE_URL = "https://demopagina.somee.com/api/v1/"; // Producción
     
     private static HabitApiClient instance;
     private HabitApiService apiService;
+    private ScoreApiService scoreApiService;
     private Retrofit retrofit;
 
     /**
@@ -61,6 +65,7 @@ public class HabitApiClient {
                 .build();
 
         apiService = retrofit.create(HabitApiService.class);
+        scoreApiService = retrofit.create(ScoreApiService.class);
     }
 
     /**
@@ -80,6 +85,14 @@ public class HabitApiClient {
      */
     public HabitApiService getApiService() {
         return apiService;
+    }
+
+    /**
+     * Obtiene el servicio de Score API configurado.
+     * @return ScoreApiService para realizar llamadas a la API de scores
+     */
+    public ScoreApiService getScoreApiService() {
+        return scoreApiService;
     }
 
     /**
@@ -109,6 +122,7 @@ public class HabitApiClient {
                 .build();
 
         apiService = retrofit.create(HabitApiService.class);
+        scoreApiService = retrofit.create(ScoreApiService.class);
         Log.d(TAG, "Base URL actualizada a: " + baseUrl);
     }
 

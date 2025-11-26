@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Habitus+</string>
-    <string name="Api_Key">AIzaSyDiHCfCjzf-C8A8ZaYPknAQEoJ_WYTxhhk</string>
+    <string name="Api_Key">YOUR_API_KEY_HERE</string>
     
     <!-- Dashboard -->
     <string name="title_todays_habits">Today\'s Habits</string>
@@ -9,6 +9,9 @@
     <string name="add_new_habit">Agregar nuevo hábito</string>
     <string name="view_map">Ver mapa de logros</string>
     <string name="open_camera">Abrir cámara para leer</string>
+    <string name="connection_status">Estado de conexión</string>
+    <string name="connection_online">Conectado a la API</string>
+    <string name="connection_offline">Modo offline (SQLite)</string>
     
     <!-- Create Habit -->
     <string name="create_habit_title">Crear Nuevo Hábito</string>

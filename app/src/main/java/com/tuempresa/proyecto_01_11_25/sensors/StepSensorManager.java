@@ -16,8 +16,11 @@ import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.Priority;
+import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
+import com.tuempresa.proyecto_01_11_25.model.Habit;
 import com.tuempresa.proyecto_01_11_25.model.HabitEvent;
 import com.tuempresa.proyecto_01_11_25.model.HabitEventStore;
+import com.tuempresa.proyecto_01_11_25.repository.HabitRepository;
 
 public class StepSensorManager {
 
@@ -74,12 +77,47 @@ public class StepSensorManager {
                                 HabitEvent.HabitType.WALK
                         ));
                         
-                        // Agregar puntos a la base de datos
+                        // Agregar puntos a la base de datos y API
                         try {
-                            com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper dbHelper = 
-                                new com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper(ctx);
-                            int points = dbHelper.getHabitPoints("Caminar");
-                            dbHelper.addScore("Caminar", points);
+                            HabitDatabaseHelper dbHelper = new HabitDatabaseHelper(ctx);
+                            HabitRepository habitRepository = HabitRepository.getInstance(ctx);
+                            
+                            // Buscar hábito de tipo WALK
+                            java.util.List<Habit> habits = dbHelper.getAllHabits();
+                            for (Habit habit : habits) {
+                                if (habit.getType() == Habit.HabitType.WALK && !habit.isCompleted()) {
+                                    habit.setCompleted(true);
+                                    dbHelper.updateHabitCompleted(habit.getTitle(), true);
+                                    
+                                    // Actualizar hábito en API
+                                    habitRepository.updateHabit(habit, new HabitRepository.RepositoryCallback<Habit>() {
+                                        @Override
+                                        public void onSuccess(Habit updatedHabit) {
+                                            android.util.Log.d("StepSensor", "Hábito WALK actualizado en API");
+                                        }
+
+                                        @Override
+                                        public void onError(String error) {
+                                            android.util.Log.e("StepSensor", "Error al actualizar hábito WALK en API: " + error);
+                                        }
+                                    });
+                                    
+                                    // Agregar puntos (guarda en SQLite + API)
+                                    int points = habit.getPoints();
+                                    habitRepository.addScore(habit.getId(), habit.getTitle(), points, new HabitRepository.RepositoryCallback<Void>() {
+                                        @Override
+                                        public void onSuccess(Void data) {
+                                            android.util.Log.d("StepSensor", "Score WALK guardado: " + points + " puntos");
+                                        }
+
+                                        @Override
+                                        public void onError(String error) {
+                                            android.util.Log.e("StepSensor", "Error al guardar score WALK: " + error);
+                                        }
+                                    });
+                                    break;
+                                }
+                            }
                         } catch (Exception e) {
                             android.util.Log.e("StepSensor", "Error al agregar puntos", e);
                         }

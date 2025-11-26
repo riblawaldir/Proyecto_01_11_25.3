@@ -18,6 +18,7 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.tuempresa.proyecto_01_11_25.R;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
 import com.tuempresa.proyecto_01_11_25.model.Habit;
+import com.tuempresa.proyecto_01_11_25.repository.HabitRepository;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -28,7 +29,8 @@ import java.util.List;
 public class ConfigureHabitActivity extends AppCompatActivity {
 
     private Habit.HabitType habitType;
-    private HabitDatabaseHelper dbHelper;
+    private HabitDatabaseHelper dbHelper; // Mantener para compatibilidad (lectura)
+    private HabitRepository habitRepository; // Para guardar en API
     private LinearLayout containerConfig;
     private TextInputEditText edtHabitName;
     private MaterialButton btnSave;
@@ -42,6 +44,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
         setContentView(R.layout.activity_configure_habit);
 
         dbHelper = new HabitDatabaseHelper(this);
+        habitRepository = HabitRepository.getInstance(this);
         
         // Verificar si es edición
         habitIdToEdit = getIntent().getLongExtra("habit_id", -1);
@@ -82,10 +85,11 @@ public class ConfigureHabitActivity extends AppCompatActivity {
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
         btnSave.setOnClickListener(v -> saveHabit());
 
-        loadConfigurationForType(habitType);
-        
-        // Cargar selector de íconos
+        // Cargar selector de íconos PRIMERO (más visual, mejor engagement)
         loadIconSelector();
+        
+        // Luego cargar configuración específica del tipo
+        loadConfigurationForType(habitType);
         
         // Si es edición, cargar valores existentes
         if (habitIdToEdit > 0) {
@@ -370,8 +374,12 @@ public class ConfigureHabitActivity extends AppCompatActivity {
     private void saveHabit() {
         String name = edtHabitName.getText() != null ? edtHabitName.getText().toString().trim() : "";
         
-        if (name.isEmpty()) {
-            Toast.makeText(this, getString(R.string.habit_name_required), Toast.LENGTH_SHORT).show();
+        // Validar nombre usando HabitValidator
+        com.tuempresa.proyecto_01_11_25.utils.HabitValidator.ValidationResult nameValidation = 
+                com.tuempresa.proyecto_01_11_25.utils.HabitValidator.validateHabitName(name);
+        if (!nameValidation.isValid) {
+            Toast.makeText(this, nameValidation.errorMessage, Toast.LENGTH_SHORT).show();
+            edtHabitName.requestFocus();
             return;
         }
 
@@ -388,15 +396,28 @@ public class ConfigureHabitActivity extends AppCompatActivity {
         Boolean englishMode = null;
         Boolean codingMode = null;
 
+        // Recopilar y validar según el tipo
         switch (habitType) {
             case READ_BOOK:
                 pagesPerDay = getPagesPerDay();
+                com.tuempresa.proyecto_01_11_25.utils.HabitValidator.ValidationResult pagesValidation = 
+                        com.tuempresa.proyecto_01_11_25.utils.HabitValidator.validatePages(pagesPerDay);
+                if (!pagesValidation.isValid) {
+                    Toast.makeText(this, pagesValidation.errorMessage, Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 break;
             case VITAMINS:
                 reminderTimes = getReminderTimes();
                 break;
             case MEDITATE:
                 durationMinutes = getDurationMinutes();
+                com.tuempresa.proyecto_01_11_25.utils.HabitValidator.ValidationResult durationValidation = 
+                        com.tuempresa.proyecto_01_11_25.utils.HabitValidator.validateMeditationDuration(durationMinutes);
+                if (!durationValidation.isValid) {
+                    Toast.makeText(this, durationValidation.errorMessage, Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 dndMode = getDndMode();
                 musicId = getMusicId();
                 break;
@@ -405,11 +426,19 @@ public class ConfigureHabitActivity extends AppCompatActivity {
                 break;
             case GYM:
                 gymDays = getGymDays();
+                com.tuempresa.proyecto_01_11_25.utils.HabitValidator.ValidationResult gymValidation = 
+                        com.tuempresa.proyecto_01_11_25.utils.HabitValidator.validateGymDays(gymDays);
+                if (!gymValidation.isValid) {
+                    Toast.makeText(this, gymValidation.errorMessage, Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 break;
             case WATER:
                 waterGoalGlasses = getWaterGlasses();
-                if (waterGoalGlasses == null || waterGoalGlasses <= 0) {
-                    Toast.makeText(this, getString(R.string.invalid_water_glasses), Toast.LENGTH_SHORT).show();
+                com.tuempresa.proyecto_01_11_25.utils.HabitValidator.ValidationResult waterValidation = 
+                        com.tuempresa.proyecto_01_11_25.utils.HabitValidator.validateWaterGlasses(waterGoalGlasses);
+                if (!waterValidation.isValid) {
+                    Toast.makeText(this, waterValidation.errorMessage, Toast.LENGTH_SHORT).show();
                     return;
                 }
                 break;
@@ -424,52 +453,77 @@ public class ConfigureHabitActivity extends AppCompatActivity {
                 break;
         }
 
-        // Guardar o actualizar en base de datos
-        boolean success;
+        // Mostrar loading state
+        btnSave.setEnabled(false);
+        btnSave.setText("Guardando...");
+        
+        // Crear objeto Habit
+        Habit habit = new Habit();
+        habit.setTitle(name);
+        habit.setGoal(getGoalForType(habitType));
+        habit.setCategory(getCategoryForType(habitType));
+        habit.setType(habitType);
+        habit.setPoints(10); // puntos por defecto (TODO: hacer personalizable)
+        habit.setPagesPerDay(pagesPerDay);
+        habit.setReminderTimes(reminderTimes);
+        habit.setDurationMinutes(durationMinutes);
+        habit.setDndMode(dndMode);
+        habit.setMusicId(musicId);
+        habit.setJournalEnabled(journalEnabled);
+        habit.setGymDays(gymDays);
+        habit.setWaterGoalGlasses(waterGoalGlasses);
+        habit.setOneClickComplete(oneClickComplete);
+        habit.setEnglishMode(englishMode);
+        habit.setCodingMode(codingMode);
+        habit.setHabitIcon(selectedIconName);
+
         if (habitIdToEdit > 0) {
             // Actualizar hábito existente
-            success = dbHelper.updateHabitFull(
-                habitIdToEdit,
-                name,
-                getGoalForType(habitType),
-                getCategoryForType(habitType),
-                habitType.name(),
-                10, // puntos por defecto
-                null, null, // targetValue, targetUnit
-                pagesPerDay, reminderTimes, durationMinutes,
-                dndMode, musicId, journalEnabled,
-                gymDays, waterGoalGlasses, oneClickComplete,
-                englishMode, codingMode, selectedIconName
-            );
-            if (success) {
-                Toast.makeText(this, getString(R.string.habit_updated_toast), Toast.LENGTH_SHORT).show();
-                setResult(RESULT_OK);
-                finish();
-            } else {
-                Toast.makeText(this, getString(R.string.habit_update_error_toast), Toast.LENGTH_SHORT).show();
-            }
-        } else {
-            // Crear nuevo hábito
-            long id = dbHelper.insertHabitFull(
-                name,
-                getGoalForType(habitType),
-                getCategoryForType(habitType),
-                habitType.name(),
-                10, // puntos por defecto
-                null, null, // targetValue, targetUnit
-                pagesPerDay, reminderTimes, durationMinutes,
-                dndMode, musicId, journalEnabled,
-                gymDays, waterGoalGlasses, oneClickComplete,
-                englishMode, codingMode, selectedIconName
-            );
+            habit.setId(habitIdToEdit);
+            habitRepository.updateHabit(habit, new HabitRepository.RepositoryCallback<Habit>() {
+                @Override
+                public void onSuccess(Habit updatedHabit) {
+                    runOnUiThread(() -> {
+                        btnSave.setEnabled(true);
+                        btnSave.setText(getString(R.string.save_configuration));
+                        Toast.makeText(ConfigureHabitActivity.this, "✅ " + getString(R.string.habit_updated_toast), Toast.LENGTH_SHORT).show();
+                        setResult(RESULT_OK);
+                        finish();
+                    });
+                }
 
-            if (id > 0) {
-                Toast.makeText(this, getString(R.string.habit_saved_toast), Toast.LENGTH_SHORT).show();
-                setResult(RESULT_OK);
-                finish();
-            } else {
-                Toast.makeText(this, getString(R.string.habit_save_error_toast), Toast.LENGTH_SHORT).show();
-            }
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        btnSave.setEnabled(true);
+                        btnSave.setText(getString(R.string.save_configuration));
+                        Toast.makeText(ConfigureHabitActivity.this, "❌ " + getString(R.string.habit_update_error_toast) + ": " + error, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
+        } else {
+            // Crear nuevo hábito usando Repository (guarda en SQLite + API)
+            habitRepository.createHabit(habit, new HabitRepository.RepositoryCallback<Habit>() {
+                @Override
+                public void onSuccess(Habit createdHabit) {
+                    runOnUiThread(() -> {
+                        btnSave.setEnabled(true);
+                        btnSave.setText(getString(R.string.save_configuration));
+                        Toast.makeText(ConfigureHabitActivity.this, "✅ " + getString(R.string.habit_saved_toast), Toast.LENGTH_SHORT).show();
+                        setResult(RESULT_OK);
+                        finish();
+                    });
+                }
+
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        btnSave.setEnabled(true);
+                        btnSave.setText(getString(R.string.save_configuration));
+                        Toast.makeText(ConfigureHabitActivity.this, "❌ " + getString(R.string.habit_save_error_toast) + ": " + error, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
         }
     }
     
